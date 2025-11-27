@@ -1,4 +1,4 @@
-# @overweight/guard
+# Overweight
 
 An all-in-one toolkit for keeping your bundle sizes in check. It ships with a CLI, Node API, and GitHub Action, plus a tester architecture that lets you decide how assets are evaluated.
 
@@ -14,7 +14,7 @@ An all-in-one toolkit for keeping your bundle sizes in check. It ships with a CL
 ## Installation
 
 ```sh
-pnpm add -D @overweight/guard
+pnpm add -D overweight
 ```
 
 ## Configuration
