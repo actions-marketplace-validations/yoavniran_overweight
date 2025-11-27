@@ -18,7 +18,7 @@
     "./action": "./dist/action/index.js"
   },
   "bin": {
-    "overweight": "./dist/cli.js"
+    "overweight": "dist/cli.js"
   },
   "files": [
     "dist",
