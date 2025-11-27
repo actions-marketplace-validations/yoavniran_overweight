@@ -40,5 +40,5 @@ jobs:
           config: overweight.json
           github-token: ${{ secrets.GITHUB_TOKEN }}
           comment-on-pr: true
-          update-baseline: false
+          update-baseline: true
 
