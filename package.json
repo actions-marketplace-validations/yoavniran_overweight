@@ -1,6 +1,6 @@
 {
   "name": "overweight",
-  "version": "0.0.0-development",
+  "version": "1.0.1",
   "description": "Extensible bundle size guard with pluggable testers, CLI, and GitHub Action.",
   "type": "module",
   "packageManager": "pnpm@9.15.9",
@@ -18,7 +18,7 @@
     "./action": "./dist/action/index.js"
   },
   "bin": {
-    "overweight": "./dist/cli.js"
+    "overweight": "dist/cli.js"
   },
   "files": [
     "dist",
