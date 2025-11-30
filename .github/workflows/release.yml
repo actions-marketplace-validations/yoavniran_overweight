@@ -46,10 +46,8 @@ jobs:
             if [ -n "$LATEST_TAG" ]; then
                 if git merge-base --is-ancestor "$LATEST_TAG" HEAD; then
                     echo "Latest tag $LATEST_TAG already in branch history."
-                elif git merge-base --is-ancestor HEAD "$LATEST_TAG"; then
-                    git merge --ff-only "$LATEST_TAG"
                 else
-                    echo "::warning::Latest tag $LATEST_TAG cannot fast-forward into $(git rev-parse --abbrev-ref HEAD); skipping."
+                    git merge --no-edit "$LATEST_TAG"
                 fi
             fi
       - uses: pnpm/action-setup@v3
