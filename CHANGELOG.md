@@ -1,3 +1,10 @@
+## [1.2.1](https://github.com/yoavniran/overweight/compare/v1.2.0...v1.2.1) (2025-11-30)
+
+
+### Bug Fixes
+
+* ensure gh action deps are bundled ([e99d6cd](https://github.com/yoavniran/overweight/commit/e99d6cd6d14385ec6e10a87c6f91cd9f5edbd123))
+
 # [1.2.0](https://github.com/yoavniran/overweight/compare/v1.1.0...v1.2.0) (2025-11-30)
 
 

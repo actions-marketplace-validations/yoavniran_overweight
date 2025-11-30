@@ -6,25 +6,45 @@ const externalDeps = Object.keys({
   ...(pkg.peerDependencies || {})
 });
 
-export default defineConfig({
-  entry: {
-    index: "src/index.js",
-    cli: "src/cli.js",
-    "action/index": "src/action/index.js"
-  },
-  format: ["esm"],
-  target: "node18",
-  platform: "node",
-  bundle: true,
-  clean: true,
-  sourcemap: true,
-  splitting: false,
-  dts: false,
-  shims: false,
-  treeshake: true,
-  shebang: {
-    cli: "#!/usr/bin/env node"
-  },
-  external: externalDeps
-});
+const actionDeps = ["@actions/core", "@actions/github"];
+
+export default [
+  defineConfig({
+    entry: {
+      index: "src/index.js",
+      cli: "src/cli.js"
+    },
+    format: ["esm"],
+    target: "node18",
+    platform: "node",
+    bundle: true,
+    clean: true,
+    sourcemap: true,
+    splitting: false,
+    dts: false,
+    shims: false,
+    treeshake: true,
+    shebang: {
+      cli: "#!/usr/bin/env node"
+    },
+    external: externalDeps
+  }),
+  defineConfig({
+    entry: {
+      "action/index": "src/action/index.js"
+    },
+    format: ["esm"],
+    target: "node18",
+    platform: "node",
+    bundle: true,
+    clean: false,
+    sourcemap: true,
+    splitting: false,
+    dts: false,
+    shims: false,
+    treeshake: true,
+    noExternal: actionDeps,
+    external: externalDeps.filter((dep) => !actionDeps.includes(dep))
+  })
+];
 
