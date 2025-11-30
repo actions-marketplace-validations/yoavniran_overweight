@@ -44,7 +44,13 @@ jobs:
             set -euo pipefail
             LATEST_TAG=$(git tag --list 'v*' --sort=-v:refname | head -n 1 || true)
             if [ -n "$LATEST_TAG" ]; then
-                git merge --ff-only "$LATEST_TAG"
+                if git merge-base --is-ancestor "$LATEST_TAG" HEAD; then
+                    echo "Latest tag $LATEST_TAG already in branch history."
+                elif git merge-base --is-ancestor HEAD "$LATEST_TAG"; then
+                    git merge --ff-only "$LATEST_TAG"
+                else
+                    echo "::warning::Latest tag $LATEST_TAG cannot fast-forward into $(git rev-parse --abbrev-ref HEAD); skipping."
+                fi
             fi
       - uses: pnpm/action-setup@v3
         with:
