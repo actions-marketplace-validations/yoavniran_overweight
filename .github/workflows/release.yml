@@ -38,6 +38,14 @@ jobs:
             set -euo pipefail
             git fetch origin main --tags --prune
             git merge --ff-only origin/main
+
+      - name: Ensure latest tag is in history
+        run: |
+            set -euo pipefail
+            LATEST_TAG=$(git tag --list 'v*' --sort=-v:refname | head -n 1 || true)
+            if [ -n "$LATEST_TAG" ]; then
+                git merge --ff-only "$LATEST_TAG"
+            fi
       - uses: pnpm/action-setup@v3
         with:
           version: 9
@@ -55,9 +63,9 @@ jobs:
         run: |
           set -euo pipefail
           pnpm run release --dry-run 2>&1 | tee sr.log
-          VERSION=$(sed -n 's/.*The next release version is \([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/p' sr.log | tail -n 1)
+          VERSION=$(perl -ne 'print "$1\n" if /The next release version is ([0-9]+\.[0-9]+\.[0-9]+)/' sr.log | tail -n 1)
           if [ -z "$VERSION" ]; then
-            VERSION=$(node -p "require('./package.json').version")
+            VERSION="unknown"
           fi
           echo "next_version=$VERSION" >> "$GITHUB_OUTPUT"
 
@@ -68,7 +76,7 @@ jobs:
           export NPM_TOKEN="${NODE_AUTH_TOKEN}"
           set -euo pipefail
           pnpm run release 2>&1 | tee sr.log
-          VERSION=$(sed -n 's/.*The next release version is \([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/p' sr.log | tail -n 1)
+          VERSION=$(perl -ne 'print "$1\n" if /The next release version is ([0-9]+\.[0-9]+\.[0-9]+)/' sr.log | tail -n 1)
           if [ -z "$VERSION" ]; then
             VERSION=$(node -p "require('./package.json').version")
           fi
