@@ -50,20 +50,35 @@ jobs:
       - run: pnpm run build
 
       - name: Run semantic-release (dry run)
+        id: semantic_release_dry_run
         if: ${{ !(inputs['dry-run'] == 'false' || inputs['dry-run'] == false) }}
-        run: pnpm run release --dry-run
+        run: |
+          set -euo pipefail
+          pnpm run release --dry-run 2>&1 | tee sr.log
+          VERSION=$(sed -n 's/.*The next release version is \([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/p' sr.log | tail -n 1)
+          if [ -z "$VERSION" ]; then
+            VERSION=$(node -p "require('./package.json').version")
+          fi
+          echo "next_version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Run semantic-release
+        id: semantic_release
         if: ${{ inputs['dry-run'] == 'false' || inputs['dry-run'] == false }}
         run: |
           export NPM_TOKEN="${NODE_AUTH_TOKEN}"
-          pnpm run release
+          set -euo pipefail
+          pnpm run release 2>&1 | tee sr.log
+          VERSION=$(sed -n 's/.*The next release version is \([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/p' sr.log | tail -n 1)
+          if [ -z "$VERSION" ]; then
+            VERSION=$(node -p "require('./package.json').version")
+          fi
+          echo "next_version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Update major release tag
         if: ${{ inputs['dry-run'] == 'false' || inputs['dry-run'] == false }}
         run: |
           set -euo pipefail
-          VERSION=$(node -p "require('./package.json').version")
+          VERSION="${{ steps.semantic_release.outputs.next_version }}"
           MAJOR_TAG="v${VERSION%%.*}"
           FULL_TAG="v${VERSION}"
           git fetch --tags origin
@@ -73,7 +88,7 @@ jobs:
       - name: Publish summary (release)
         if: ${{ inputs['dry-run'] == 'false' || inputs['dry-run'] == false }}
         run: |
-          VERSION=$(node -p "require('./package.json').version")
+          VERSION="${{ steps.semantic_release.outputs.next_version }}"
           echo "Released **v${VERSION}** (major alias updated to v${VERSION%%.*})." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Sync release commit back to main
@@ -85,6 +100,6 @@ jobs:
       - name: Publish summary (dry run)
         if: ${{ !(inputs['dry-run'] == 'false' || inputs['dry-run'] == false) }}
         run: |
-          VERSION=$(node -p "require('./package.json').version")
+          VERSION="${{ steps.semantic_release_dry_run.outputs.next_version }}"
           echo "Dry run preview completed for version **v${VERSION}** (no tags or packages published)." >> "$GITHUB_STEP_SUMMARY"
 
