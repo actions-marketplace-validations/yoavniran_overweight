@@ -125,15 +125,35 @@ jobs:
           VERSION="${{ steps.semantic_release.outputs.next_version }}"
           echo "Released **v${VERSION}** (major alias updated to v${VERSION%%.*})." >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Sync release commit back to main
-        if: ${{ steps.dryrun.outputs.value == 'false' }}
-        run: |
-          set -euo pipefail
-          git push origin HEAD:main
-
       - name: Publish summary (dry run)
         if: ${{ steps.dryrun.outputs.value == 'true' }}
         run: |
           VERSION="${{ steps.semantic_release_dry_run.outputs.next_version }}"
           echo "Dry run preview completed for version **v${VERSION}** (no tags or packages published)." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Ensure release PR targets main
+        if: ${{ steps.dryrun.outputs.value == 'false' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          BASE_BRANCH="main"
+          HEAD_BRANCH="${GITHUB_REF_NAME}"
+          VERSION="${{ steps.semantic_release.outputs.next_version }}"
+          PR_URL=$(gh pr list --state open --base "$BASE_BRANCH" --head "$HEAD_BRANCH" --json url --jq '.[0].url' || true)
+          if [ -z "$PR_URL" ]; then
+            TITLE="chore: merge release v${VERSION} into ${BASE_BRANCH}"
+            BODY="Automated PR generated after releasing v${VERSION}. This keeps ${BASE_BRANCH} aligned with ${HEAD_BRANCH}."
+            PR_URL=$(gh pr create --base "$BASE_BRANCH" --head "$HEAD_BRANCH" --title "$TITLE" --body "$BODY")
+            echo "Created PR ${PR_URL}"
+          else
+            echo "Reusing existing PR ${PR_URL}"
+          fi
+          if [ -n "$PR_URL" ]; then
+            if gh pr merge "$PR_URL" --merge --auto >/dev/null 2>&1; then
+              echo "Auto-merge enabled on ${PR_URL}"
+            else
+              echo "Auto-merge could not be enabled automatically (check branch protections)."
+            fi
+          fi
 
