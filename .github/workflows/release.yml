@@ -44,11 +44,11 @@ jobs:
             set -euo pipefail
             LATEST_TAG=$(git tag --list 'v*' --sort=-v:refname | head -n 1 || true)
             if [ -n "$LATEST_TAG" ]; then
-                if git merge-base --is-ancestor "$LATEST_TAG" HEAD; then
-                    echo "Latest tag $LATEST_TAG already in branch history."
-                else
-                    git merge --no-edit "$LATEST_TAG"
-                fi
+                echo "Latest tag is $LATEST_TAG. Creating temporary merge to include it."
+                git config user.name "Overweight Bot"
+                git config user.email "ci-bot@overweight-gh-action.com"
+                git merge --no-edit --no-commit "$LATEST_TAG" || true
+                git reset --hard HEAD
             fi
       - uses: pnpm/action-setup@v3
         with:
