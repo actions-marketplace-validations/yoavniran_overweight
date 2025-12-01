@@ -41,7 +41,23 @@ export default [
     dts: false,
     shims: false,
     treeshake: true,
-    noExternal: [/.*/]
+    noExternal: [/.*/],
+    esbuildOptions(options) {
+      options.banner = {
+        js: `
+import { createRequire } from 'module';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+const require = createRequire(import.meta.url);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+// Make require available globally for CommonJS modules
+if (typeof globalThis !== 'undefined') {
+  globalThis.require = require;
+}
+`.trim()
+      };
+    }
   })
 ];
 
