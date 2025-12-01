@@ -34,7 +34,8 @@
     "release": "semantic-release",
     "prepare": "simple-git-hooks",
     "prepublishOnly": "pnpm run build",
-    "dogfood": "pnpm run build && node dist/cli.js --reporter console --config overweight.json"
+    "dogfood": "pnpm run build && node dist/cli.js --reporter console --config overweight.json",
+    "sync-tags": "git fetch --tags --force"
   },
   "keywords": [
     "bundlesize",
