@@ -1,3 +1,11 @@
+## [1.3.9](https://github.com/yoavniran/overweight/compare/v1.3.8...v1.3.9) (2025-12-01)
+
+
+### Bug Fixes
+
+* branch creation ([9770286](https://github.com/yoavniran/overweight/commit/977028616192050f12825711d7eeeab83615af8e))
+* extend wait time for branch ([b46a35e](https://github.com/yoavniran/overweight/commit/b46a35e892e79443031dea0497cb643fdf855976))
+
 ## [1.3.8](https://github.com/yoavniran/overweight/compare/v1.3.7...v1.3.8) (2025-12-01)
 
 
