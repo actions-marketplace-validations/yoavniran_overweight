@@ -6,8 +6,6 @@ const externalDeps = Object.keys({
   ...(pkg.peerDependencies || {})
 });
 
-const actionDeps = ["@actions/core", "@actions/github"];
-
 export default [
   defineConfig({
     entry: {
@@ -43,8 +41,7 @@ export default [
     dts: false,
     shims: false,
     treeshake: true,
-    noExternal: actionDeps,
-    external: externalDeps.filter((dep) => !actionDeps.includes(dep))
+    noExternal: [/.*/]
   })
 ];
 
