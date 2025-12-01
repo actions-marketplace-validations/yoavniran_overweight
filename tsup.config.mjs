@@ -6,8 +6,6 @@ const externalDeps = Object.keys({
   ...(pkg.peerDependencies || {})
 });
 
-const actionDeps = ["@actions/core", "@actions/github"];
-
 export default [
   defineConfig({
     entry: {
@@ -15,7 +13,7 @@ export default [
       cli: "src/cli.js"
     },
     format: ["esm"],
-    target: "node18",
+    target: "node20",
     platform: "node",
     bundle: true,
     clean: true,
@@ -34,7 +32,7 @@ export default [
       "action/index": "src/action/index.js"
     },
     format: ["esm"],
-    target: "node18",
+    target: "node20",
     platform: "node",
     bundle: true,
     clean: false,
@@ -43,8 +41,7 @@ export default [
     dts: false,
     shims: false,
     treeshake: true,
-    noExternal: actionDeps,
-    external: externalDeps.filter((dep) => !actionDeps.includes(dep))
+    noExternal: [/.*/]
   })
 ];
 
