@@ -1,3 +1,10 @@
+## [1.3.8](https://github.com/yoavniran/overweight/compare/v1.3.7...v1.3.8) (2025-12-01)
+
+
+### Bug Fixes
+
+* use gh api for branch create ([41486a5](https://github.com/yoavniran/overweight/commit/41486a5eac25edbf44fce2c878400bfe1159b31e))
+
 ## [1.3.7](https://github.com/yoavniran/overweight/compare/v1.3.6...v1.3.7) (2025-12-01)
 
 
