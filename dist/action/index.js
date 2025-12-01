@@ -1,20 +1,29 @@
+import { createRequire } from 'module';
+import { fileURLToPath } from 'url';
+import path, { dirname } from 'path';
 import fs4 from 'fs/promises';
-import path from 'path';
 import { Buffer as Buffer$1 } from 'buffer';
 import { promisify } from 'util';
 import { brotliCompress, gzip, constants } from 'zlib';
 import fs3 from 'fs';
 
+const require$1 = createRequire(import.meta.url);
+const __filename$1 = fileURLToPath(import.meta.url);
+dirname(__filename$1);
+// Make require available globally for CommonJS modules
+if (typeof globalThis !== 'undefined') {
+  globalThis.require = require$1;
+}
 var __create = Object.create;
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
-var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require : typeof Proxy !== "undefined" ? new Proxy(x, {
-  get: (a, b) => (typeof require !== "undefined" ? require : a)[b]
+var __require = /* @__PURE__ */ ((x) => typeof require$1 !== "undefined" ? require$1 : typeof Proxy !== "undefined" ? new Proxy(x, {
+  get: (a, b) => (typeof require$1 !== "undefined" ? require$1 : a)[b]
 }) : x)(function(x) {
-  if (typeof require !== "undefined") return require.apply(this, arguments);
+  if (typeof require$1 !== "undefined") return require$1.apply(this, arguments);
   throw Error('Dynamic require of "' + x + '" is not supported');
 });
 var __esm = (fn, res) => function __init() {
