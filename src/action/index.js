@@ -230,11 +230,45 @@ const buildUpdateBranchName = ({ prefix, prNumber, currentBranch }) => {
   return `${sanitizeBranchPrefix(prefix)}/${suffix}`;
 };
 
-const resolveBaseBranch = () =>
-  github.context.payload.pull_request?.base?.ref ||
-  process.env.GITHUB_REF_NAME ||
-  process.env.GITHUB_REF?.split("/").pop() ||
-  "main";
+const resolveBaseBranch = async (octokit) => {
+  if (github.context.payload.pull_request?.base?.ref) {
+    core.info(`base branch is ${github.context.payload.pull_request.base.ref}`);
+    return github.context.payload.pull_request.base.ref;
+  }
+
+  if (process.env.GITHUB_REF_NAME) {
+    core.info(`base branch is ${process.env.GITHUB_REF_NAME}`);
+    return process.env.GITHUB_REF_NAME;
+  }
+
+  if (process.env.GITHUB_REF) {
+    const ref = process.env.GITHUB_REF.split("/").pop();
+    if (ref) {
+      core.info(`base branch is ${ref}`);
+      return ref;
+    }
+  }
+
+  if (octokit) {
+    try {
+      const { owner, repo } = github.context.repo;
+      const repoInfo = await octokit.rest.repos.get({
+        owner,
+        repo
+      });
+
+      core.info(`base branch is ${repoInfo.data.default_branch}`);
+      return repoInfo.data.default_branch;
+    } catch (error) {
+      core.warning(
+        `Unable to fetch default branch from repository: ${error.message}. Falling back to "main".`
+      );
+    }
+  }
+
+  core.warning("Falling back to 'main' as base branch.");
+  return "main";
+};
 
 const ensureUpdateBranchExists = async ({ octokit, branchName, baseBranch }) => {
   const { owner, repo } = github.context.repo;
@@ -260,14 +294,21 @@ const ensureUpdateBranchExists = async ({ octokit, branchName, baseBranch }) => 
 
   const baseSha = baseRef.data.object?.sha || baseRef.data.sha;
 
-  await octokit.rest.git.createRef({
-    owner,
-    repo,
-    ref: `refs/heads/${branchName}`,
-    sha: baseSha
-  });
-
-  return false;
+  try {
+    await octokit.rest.git.createRef({
+      owner,
+      repo,
+      ref: `refs/heads/${branchName}`,
+      sha: baseSha
+    });
+    return false;
+  } catch (error) {
+    if (error.status === 422) {
+      core.info(`Branch ${branchName} already exists, reusing it.`);
+      return true;
+    }
+    throw error;
+  }
 };
 
 const getExistingFileSha = async ({ octokit, branchName, path: repoPath }) => {
@@ -497,7 +538,7 @@ export const runAction = async () => {
             `Skipping baseline update because branch "${currentBranch}" matches baseline-protected-branches.`
           );
         } else {
-          const baseBranch = resolveBaseBranch();
+          const baseBranch = await resolveBaseBranch(octokit);
           const prTitleInput = core.getInput("update-pr-title") || "chore: update baseline report";
           const prTitle = `${prTitleInput} (🧳 Overweight Guard)`;
           const prBody =
