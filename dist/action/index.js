@@ -42537,15 +42537,20 @@ var buildUpdateBranchName = ({ prefix, prNumber, currentBranch }) => {
 // src/action/git.js
 var import_core10 = __toESM(require_core(), 1);
 var import_github2 = __toESM(require_github(), 1);
+var MAX_CREATION_ATTEMPTS = 2;
 var MAX_VERIFICATION_ATTEMPTS = 7;
 var VERIFICATION_BASE_DELAY_MS = 500;
+var BRANCH_REF_PREFIX = "refs/heads/";
+var SHORT_REF_PREFIX = "heads/";
+var resolveRefSha = (response) => response.data.object?.sha || response.data.sha;
 var ensureUpdateBranchExists = async ({ octokit, branchName, baseBranch }) => {
   if (!octokit) {
     throw new Error("ensureUpdateBranchExists requires an authenticated octokit client.");
   }
   const { owner, repo } = import_github2.default.context.repo;
-  const branchRef = `heads/${branchName}`;
-  const baseRef = `heads/${baseBranch}`;
+  const branchRef = `${SHORT_REF_PREFIX}${branchName}`;
+  const baseRef = `${SHORT_REF_PREFIX}${baseBranch}`;
+  const fullBranchRef = `${BRANCH_REF_PREFIX}${branchName}`;
   import_core10.default.info(`Checking if branch ${branchName} exists via GitHub API...`);
   try {
     const existing = await octokit.rest.git.getRef({
@@ -42573,27 +42578,15 @@ var ensureUpdateBranchExists = async ({ octokit, branchName, baseBranch }) => {
   });
   const baseSha = base.data.object?.sha || base.data.sha;
   import_core10.default.info(`Base branch ${baseBranch} SHA: ${baseSha}`);
-  try {
-    import_core10.default.info(`Creating branch ${branchName} from ${baseBranch} via GitHub API...`);
-    await octokit.rest.git.createRef({
-      owner,
-      repo,
-      ref: `refs/heads/${branchName}`,
-      sha: baseSha
-    });
-    import_core10.default.info(`Successfully created branch ${branchName}`);
-  } catch (error46) {
-    if (error46.status === 422) {
-      import_core10.default.info(
-        `Branch ${branchName} already exists (422), will reuse existing branch after verification...`
-      );
-    } else {
-      import_core10.default.warning(
-        `Failed to create branch ${branchName} via GitHub API: ${error46.message} (status: ${error46.status})`
-      );
-      throw error46;
-    }
-  }
+  await createBranchWithCleanup({
+    octokit,
+    owner,
+    repo,
+    branchName,
+    branchRef,
+    fullBranchRef,
+    baseSha
+  });
   import_core10.default.info(`Verifying branch ${branchName} is accessible via GitHub API...`);
   for (let attempt = 0; attempt < MAX_VERIFICATION_ATTEMPTS; attempt++) {
     try {
@@ -42602,31 +42595,97 @@ var ensureUpdateBranchExists = async ({ octokit, branchName, baseBranch }) => {
         repo,
         ref: branchRef
       });
-      const branchSha = branchRefData.data.object?.sha || branchRefData.data.sha;
+      const branchSha = resolveRefSha(branchRefData);
       import_core10.default.info(`Branch ${branchName} verified at SHA: ${branchSha}`);
       return true;
     } catch (error46) {
-      if (error46.status === 404) {
-        if (attempt < MAX_VERIFICATION_ATTEMPTS - 1) {
-          const delay = VERIFICATION_BASE_DELAY_MS * Math.pow(2, attempt);
-          import_core10.default.info(
-            `Branch ${branchName} not yet accessible (404), retrying in ${delay}ms (attempt ${attempt + 1}/${MAX_VERIFICATION_ATTEMPTS})...`
-          );
-          await new Promise((resolve) => setTimeout(resolve, delay));
-        } else {
-          import_core10.default.warning(
-            `Branch ${branchName} still not accessible after ${MAX_VERIFICATION_ATTEMPTS} attempts via GitHub API`
-          );
-          throw new Error(
-            `Branch ${branchName} was created but is not accessible after multiple retries`
-          );
-        }
+      if (error46.status === 404 && attempt < MAX_VERIFICATION_ATTEMPTS - 1) {
+        const delay = VERIFICATION_BASE_DELAY_MS * Math.pow(2, attempt);
+        import_core10.default.info(
+          `Branch ${branchName} not yet accessible (404), retrying in ${delay}ms (attempt ${attempt + 1}/${MAX_VERIFICATION_ATTEMPTS})...`
+        );
+        await new Promise((resolve) => setTimeout(resolve, delay));
       } else {
-        throw error46;
+        import_core10.default.warning(
+          `Branch ${branchName} still not accessible after ${MAX_VERIFICATION_ATTEMPTS} attempts via GitHub API`
+        );
+        throw new Error(
+          `Branch ${branchName} was created but is not accessible after multiple retries`
+        );
       }
     }
   }
   return true;
+};
+var createBranchWithCleanup = async ({
+  octokit,
+  owner,
+  repo,
+  branchName,
+  branchRef,
+  fullBranchRef,
+  baseSha
+}) => {
+  for (let attempt = 0; attempt < MAX_CREATION_ATTEMPTS; attempt++) {
+    try {
+      import_core10.default.info(`Creating branch ${branchName} via GitHub API (attempt ${attempt + 1})...`);
+      await octokit.rest.git.createRef({
+        owner,
+        repo,
+        ref: fullBranchRef,
+        sha: baseSha
+      });
+      import_core10.default.info(`Successfully created branch ${branchName}`);
+      return;
+    } catch (error46) {
+      if (error46.status !== 422) {
+        import_core10.default.warning(
+          `Failed to create branch ${branchName} via GitHub API: ${error46.message} (status: ${error46.status})`
+        );
+        throw error46;
+      }
+      import_core10.default.info(
+        `Branch ${branchName} already exists (422). Attempting to reuse or remove stale reference...`
+      );
+      try {
+        const existing = await octokit.rest.git.getRef({
+          owner,
+          repo,
+          ref: branchRef
+        });
+        const existingSha = resolveRefSha(existing);
+        import_core10.default.info(`Found existing branch ${branchName} at SHA ${existingSha}, reusing it.`);
+        return;
+      } catch (getError) {
+        if (getError.status !== 404) {
+          throw getError;
+        }
+        import_core10.default.info(
+          `Branch ${branchName} not readable after 422 (404). Deleting stale ref and retrying...`
+        );
+        try {
+          await octokit.rest.git.deleteRef({
+            owner,
+            repo,
+            ref: fullBranchRef
+          });
+          import_core10.default.info(`Deleted stale reference ${fullBranchRef}`);
+        } catch (deleteError) {
+          if (deleteError.status === 404 || deleteError.status === 422) {
+            import_core10.default.info(`Stale reference ${fullBranchRef} was already absent.`);
+          } else {
+            import_core10.default.warning(
+              `Failed to delete stale ref ${fullBranchRef}: ${deleteError.message} (status: ${deleteError.status})`
+            );
+            throw deleteError;
+          }
+        }
+      }
+    }
+  }
+  throw new Error(
+    `Unable to create branch ${branchName} after cleaning up conflicting references.`
+  );
 };
 
 // src/action/github.js

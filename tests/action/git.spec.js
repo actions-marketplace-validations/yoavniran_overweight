@@ -6,7 +6,8 @@ const octokitMock = {
   rest: {
     git: {
       getRef: vi.fn(),
-      createRef: vi.fn()
+      createRef: vi.fn(),
+      deleteRef: vi.fn()
     }
   }
 };
@@ -31,7 +32,9 @@ describe("ensureUpdateBranchExists (GitHub API)", () => {
     vi.clearAllMocks();
     octokitMock.rest.git.getRef.mockReset();
     octokitMock.rest.git.createRef.mockReset();
+    octokitMock.rest.git.deleteRef.mockReset();
     octokitMock.rest.git.getRef.mockResolvedValue({ data: { object: { sha: "existing-sha" } } });
+    octokitMock.rest.git.deleteRef.mockResolvedValue({});
   });
 
   it("reuses existing branch when it already exists", async () => {
@@ -43,6 +46,7 @@ describe("ensureUpdateBranchExists (GitHub API)", () => {
 
     expect(result).toBe(true);
     expect(octokitMock.rest.git.createRef).not.toHaveBeenCalled();
+    expect(octokitMock.rest.git.deleteRef).not.toHaveBeenCalled();
   });
 
   it("creates new branch when it does not exist", async () => {
@@ -65,34 +69,52 @@ describe("ensureUpdateBranchExists (GitHub API)", () => {
         sha: "base-sha"
       })
     );
+    expect(octokitMock.rest.git.deleteRef).not.toHaveBeenCalled();
   });
 
-  it("handles createRef returning 422 and verifies branch availability", async () => {
-    vi.useFakeTimers();
+  it("handles createRef returning 422 by reusing existing branch", async () => {
     octokitMock.rest.git.getRef
       .mockRejectedValueOnce(createNotFoundError()) // branch check
       .mockResolvedValueOnce({ data: { object: { sha: "base-sha" } } }) // base branch fetch
-      .mockRejectedValueOnce(createNotFoundError()) // verification attempt 1
-      .mockResolvedValueOnce({ data: { object: { sha: "new-branch-sha" } } }); // success
+      .mockResolvedValueOnce({ data: { object: { sha: "existing-sha" } } }) // reuse after 422
+      .mockResolvedValueOnce({ data: { object: { sha: "existing-sha" } } }); // verification
     octokitMock.rest.git.createRef.mockRejectedValueOnce({
       status: 422,
       message: "Reference already exists"
     });
 
-    const promise = ensureUpdateBranchExists({
+    const result = await ensureUpdateBranchExists({
       octokit: octokitMock,
       branchName: "test-branch",
       baseBranch: "main"
     });
 
-    await vi.advanceTimersByTimeAsync(500);
-    await promise;
-    vi.useRealTimers();
+    expect(result).toBe(true);
+    expect(octokitMock.rest.git.createRef).toHaveBeenCalledTimes(1);
+    expect(octokitMock.rest.git.deleteRef).not.toHaveBeenCalled();
+  });
 
-    expect(octokitMock.rest.git.createRef).toHaveBeenCalled();
-    expect(octokitMock.rest.git.getRef).toHaveBeenLastCalledWith(
-      expect.objectContaining({ ref: "heads/test-branch" })
+  it("deletes stale reference and retries when createRef returns 422 but getRef is 404", async () => {
+    octokitMock.rest.git.getRef
+      .mockRejectedValueOnce(createNotFoundError()) // branch check
+      .mockResolvedValueOnce({ data: { object: { sha: "base-sha" } } }) // base branch fetch
+      .mockRejectedValueOnce(createNotFoundError()) // reuse attempt after 422 -> still missing
+      .mockResolvedValueOnce({ data: { object: { sha: "new-branch-sha" } } }); // verification success
+    octokitMock.rest.git.createRef
+      .mockRejectedValueOnce({ status: 422, message: "Reference already exists" })
+      .mockResolvedValueOnce({});
+
+    const result = await ensureUpdateBranchExists({
+      octokit: octokitMock,
+      branchName: "test-branch",
+      baseBranch: "main"
+    });
+
+    expect(result).toBe(true);
+    expect(octokitMock.rest.git.deleteRef).toHaveBeenCalledWith(
+      expect.objectContaining({ ref: "refs/heads/test-branch" })
     );
+    expect(octokitMock.rest.git.createRef).toHaveBeenCalledTimes(2);
   });
 
   it("throws when branch never becomes accessible", async () => {

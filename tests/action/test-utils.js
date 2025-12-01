@@ -30,7 +30,8 @@ export const createOctokitMock = () => {
   };
   const gitApi = {
     getRef: vi.fn().mockResolvedValue({ data: { object: { sha: "abc123" } } }),
-    createRef: vi.fn().mockResolvedValue({})
+    createRef: vi.fn().mockResolvedValue({}),
+    deleteRef: vi.fn().mockResolvedValue({})
   };
 
   return {
@@ -69,5 +70,6 @@ export const resetOctokitMocks = (octokitMock) => {
 
   octokitMock.rest.git.getRef.mockResolvedValue({ data: { object: { sha: "abc123" } } });
   octokitMock.rest.git.createRef.mockResolvedValue({});
+  octokitMock.rest.git.deleteRef.mockResolvedValue({});
 };
 
