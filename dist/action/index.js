@@ -19311,7 +19311,7 @@ var require_exec = __commonJS({
     exports$1.getExecOutput = exports$1.exec = void 0;
     var string_decoder_1 = __require("string_decoder");
     var tr = __importStar(require_toolrunner());
-    function exec3(commandLine, args, options) {
+    function exec(commandLine, args, options) {
       return __awaiter(this, void 0, void 0, function* () {
         const commandArgs = tr.argStringToArray(commandLine);
         if (commandArgs.length === 0) {
@@ -19323,7 +19323,7 @@ var require_exec = __commonJS({
         return runner.exec();
       });
     }
-    exports$1.exec = exec3;
+    exports$1.exec = exec;
     function getExecOutput(commandLine, args, options) {
       var _a2, _b;
       return __awaiter(this, void 0, void 0, function* () {
@@ -19346,7 +19346,7 @@ var require_exec = __commonJS({
           }
         };
         const listeners = Object.assign(Object.assign({}, options === null || options === void 0 ? void 0 : options.listeners), { stdout: stdOutListener, stderr: stdErrListener });
-        const exitCode = yield exec3(commandLine, args, Object.assign(Object.assign({}, options), { listeners }));
+        const exitCode = yield exec(commandLine, args, Object.assign(Object.assign({}, options), { listeners }));
         stdout += stdoutDecoder.end();
         stderr += stderrDecoder.end();
         return {
@@ -19423,12 +19423,12 @@ var require_platform = __commonJS({
     Object.defineProperty(exports$1, "__esModule", { value: true });
     exports$1.getDetails = exports$1.isLinux = exports$1.isMacOS = exports$1.isWindows = exports$1.arch = exports$1.platform = void 0;
     var os_1 = __importDefault(__require("os"));
-    var exec3 = __importStar(require_exec());
+    var exec = __importStar(require_exec());
     var getWindowsInfo = () => __awaiter(void 0, void 0, void 0, function* () {
-      const { stdout: version2 } = yield exec3.getExecOutput('powershell -command "(Get-CimInstance -ClassName Win32_OperatingSystem).Version"', void 0, {
+      const { stdout: version2 } = yield exec.getExecOutput('powershell -command "(Get-CimInstance -ClassName Win32_OperatingSystem).Version"', void 0, {
         silent: true
       });
-      const { stdout: name } = yield exec3.getExecOutput('powershell -command "(Get-CimInstance -ClassName Win32_OperatingSystem).Caption"', void 0, {
+      const { stdout: name } = yield exec.getExecOutput('powershell -command "(Get-CimInstance -ClassName Win32_OperatingSystem).Caption"', void 0, {
         silent: true
       });
       return {
@@ -19438,7 +19438,7 @@ var require_platform = __commonJS({
     });
     var getMacOsInfo = () => __awaiter(void 0, void 0, void 0, function* () {
       var _a2, _b, _c, _d;
-      const { stdout } = yield exec3.getExecOutput("sw_vers", void 0, {
+      const { stdout } = yield exec.getExecOutput("sw_vers", void 0, {
         silent: true
       });
       const version2 = (_b = (_a2 = stdout.match(/ProductVersion:\s*(.+)/)) === null || _a2 === void 0 ? void 0 : _a2[1]) !== null && _b !== void 0 ? _b : "";
@@ -19449,7 +19449,7 @@ var require_platform = __commonJS({
       };
     });
     var getLinuxInfo = () => __awaiter(void 0, void 0, void 0, function* () {
-      const { stdout } = yield exec3.getExecOutput("lsb_release", ["-i", "-r", "-s"], {
+      const { stdout } = yield exec.getExecOutput("lsb_release", ["-i", "-r", "-s"], {
         silent: true
       });
       const [name, version2] = stdout.trim().split("\n");
@@ -29192,7 +29192,6 @@ var require_out4 = __commonJS({
 // src/action/index.js
 var import_core8 = __toESM(require_core(), 1);
 var import_github = __toESM(require_github(), 1);
-var exec = __toESM(require_exec(), 1);
 
 // node_modules/.pnpm/zod@4.1.13/node_modules/zod/v4/classic/external.js
 var external_exports = {};
@@ -42509,36 +42508,79 @@ var resolveBaseBranch = async (octokit) => {
   import_core8.default.warning("Falling back to 'main' as base branch.");
   return "main";
 };
-var tryFetchBranch = async (branchName) => {
+var ensureUpdateBranchExists = async ({ octokit, branchName, baseBranch }) => {
+  const { owner, repo } = import_github.default.context.repo;
+  import_core8.default.info(`Checking if branch ${branchName} exists...`);
   try {
-    await exec.exec("git", [
-      "fetch",
-      "origin",
-      `${branchName}:refs/remotes/origin/${branchName}`,
-      "--force",
-      "--depth=1"
-    ]);
+    const branchRef = await octokit.rest.git.getRef({
+      owner,
+      repo,
+      ref: `heads/${branchName}`
+    });
+    const branchSha = branchRef.data.object?.sha || branchRef.data.sha;
+    import_core8.default.info(`Branch ${branchName} already exists at SHA: ${branchSha}`);
     return true;
   } catch (error46) {
-    return false;
+    if (error46.status !== 404) {
+      import_core8.default.warning(`Failed to check if branch ${branchName} exists: ${error46.message}`);
+      throw error46;
+    }
+    import_core8.default.info(`Branch ${branchName} does not exist (404), will create it from ${baseBranch}`);
   }
-};
-var ensureUpdateBranchExists = async ({ octokit, branchName, baseBranch }) => {
-  import_core8.default.info(`Checking if branch ${branchName} exists...`);
-  const branchExists = await tryFetchBranch(branchName);
-  if (branchExists) {
-    import_core8.default.info(`Branch ${branchName} already exists as remote branch origin/${branchName}`);
-    await exec.exec("git", ["checkout", branchName], { silent: true });
-    return true;
+  import_core8.default.info(`Fetching base branch ${baseBranch} to create ${branchName}...`);
+  const baseRef = await octokit.rest.git.getRef({
+    owner,
+    repo,
+    ref: `heads/${baseBranch}`
+  });
+  const baseSha = baseRef.data.object?.sha || baseRef.data.sha;
+  import_core8.default.info(`Base branch ${baseBranch} SHA: ${baseSha}`);
+  try {
+    import_core8.default.info(`Creating branch ${branchName} from ${baseBranch} (${baseSha})...`);
+    await octokit.rest.git.createRef({
+      owner,
+      repo,
+      ref: `refs/heads/${branchName}`,
+      sha: baseSha
+    });
+    import_core8.default.info(`Successfully created branch ${branchName}`);
+  } catch (error46) {
+    if (error46.status === 422) {
+      import_core8.default.info(`Branch ${branchName} already exists (422), verifying it's accessible...`);
+    } else {
+      import_core8.default.warning(`Failed to create branch ${branchName}: ${error46.message} (status: ${error46.status})`);
+      throw error46;
+    }
   }
-  import_core8.default.info(`Branch ${branchName} does not exist. Creating it from ${baseBranch}...`);
-  await exec.exec("git", ["fetch", "origin", baseBranch, "--depth=1"], { silent: true });
-  await exec.exec("git", ["checkout", baseBranch], { silent: true });
-  await exec.exec("git", ["checkout", "-b", branchName], { silent: true });
-  import_core8.default.info(`Pushing branch ${branchName} to origin...`);
-  await exec.exec("git", ["push", "origin", branchName, "--force"], { silent: true });
-  import_core8.default.info(`Successfully created and pushed branch ${branchName}`);
-  return false;
+  import_core8.default.info(`Verifying branch ${branchName} is accessible...`);
+  const maxRetries = 5;
+  const baseDelay = 500;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const branchRef = await octokit.rest.git.getRef({
+        owner,
+        repo,
+        ref: `heads/${branchName}`
+      });
+      const branchSha = branchRef.data.object?.sha || branchRef.data.sha;
+      import_core8.default.info(`Branch ${branchName} verified and accessible at SHA: ${branchSha}`);
+      return true;
+    } catch (error46) {
+      if (error46.status === 404) {
+        if (attempt < maxRetries - 1) {
+          const delay = baseDelay * Math.pow(2, attempt);
+          import_core8.default.info(`Branch ${branchName} not yet accessible (404), retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})...`);
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        } else {
+          import_core8.default.warning(`Branch ${branchName} still not accessible after ${maxRetries} attempts`);
+          throw new Error(`Branch ${branchName} was created but is not accessible after multiple retries`);
+        }
+      } else {
+        throw error46;
+      }
+    }
+  }
+  return true;
 };
 var getExistingFileSha = async ({ octokit, branchName, path: repoPath }) => {
   const { owner, repo } = import_github.default.context.repo;

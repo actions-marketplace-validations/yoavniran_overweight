@@ -4,7 +4,6 @@ import { Buffer } from "node:buffer";
 
 import core from "@actions/core";
 import github from "@actions/github";
-import * as exec from "@actions/exec";
 
 import { loadConfig, normalizeConfig } from "../config/load-config.js";
 import { runChecks } from "../core/run-checks.js";
@@ -258,53 +257,86 @@ const resolveBaseBranch = async (octokit) => {
   return "main";
 };
 
-// Try to fetch a branch to check if it exists (similar to peter-evans/create-pull-request)
-const tryFetchBranch = async (branchName) => {
+const ensureUpdateBranchExists = async ({ octokit, branchName, baseBranch }) => {
+  const { owner, repo } = github.context.repo;
+
+  core.info(`Checking if branch ${branchName} exists...`);
   try {
-    await exec.exec("git", [
-      "fetch",
-      "origin",
-      `${branchName}:refs/remotes/origin/${branchName}`,
-      "--force",
-      "--depth=1"
-    ]);
+    const branchRef = await octokit.rest.git.getRef({
+      owner,
+      repo,
+      ref: `heads/${branchName}`
+    });
+    const branchSha = branchRef.data.object?.sha || branchRef.data.sha;
+    core.info(`Branch ${branchName} already exists at SHA: ${branchSha}`);
     return true;
   } catch (error) {
-    return false;
-  }
-};
-
-const ensureUpdateBranchExists = async ({ octokit, branchName, baseBranch }) => {
-  core.info(`Checking if branch ${branchName} exists...`);
-  
-  // Try to fetch the branch to see if it exists (like peter-evans/create-pull-request)
-  const branchExists = await tryFetchBranch(branchName);
-  
-  if (branchExists) {
-    core.info(`Branch ${branchName} already exists as remote branch origin/${branchName}`);
-    // Checkout the existing branch
-    await exec.exec("git", ["checkout", branchName], { silent: true });
-    return true;
+    if (error.status !== 404) {
+      core.warning(`Failed to check if branch ${branchName} exists: ${error.message}`);
+      throw error;
+    }
+    core.info(`Branch ${branchName} does not exist (404), will create it from ${baseBranch}`);
   }
 
-  // Branch doesn't exist, create it from base branch
-  core.info(`Branch ${branchName} does not exist. Creating it from ${baseBranch}...`);
-  
-  // Fetch the base branch to ensure we have it
-  await exec.exec("git", ["fetch", "origin", baseBranch, "--depth=1"], { silent: true });
-  
-  // Checkout the base branch first
-  await exec.exec("git", ["checkout", baseBranch], { silent: true });
-  
-  // Create and checkout the new branch from base
-  await exec.exec("git", ["checkout", "-b", branchName], { silent: true });
-  
-  // Push the branch to origin
-  core.info(`Pushing branch ${branchName} to origin...`);
-  await exec.exec("git", ["push", "origin", branchName, "--force"], { silent: true });
-  
-  core.info(`Successfully created and pushed branch ${branchName}`);
-  return false;
+  core.info(`Fetching base branch ${baseBranch} to create ${branchName}...`);
+  const baseRef = await octokit.rest.git.getRef({
+    owner,
+    repo,
+    ref: `heads/${baseBranch}`
+  });
+
+  const baseSha = baseRef.data.object?.sha || baseRef.data.sha;
+  core.info(`Base branch ${baseBranch} SHA: ${baseSha}`);
+
+  try {
+    core.info(`Creating branch ${branchName} from ${baseBranch} (${baseSha})...`);
+    await octokit.rest.git.createRef({
+      owner,
+      repo,
+      ref: `refs/heads/${branchName}`,
+      sha: baseSha
+    });
+    core.info(`Successfully created branch ${branchName}`);
+  } catch (error) {
+    if (error.status === 422) {
+      core.info(`Branch ${branchName} already exists (422), verifying it's accessible...`);
+    } else {
+      core.warning(`Failed to create branch ${branchName}: ${error.message} (status: ${error.status})`);
+      throw error;
+    }
+  }
+
+  // Verify the branch is accessible by retrying getRef with exponential backoff
+  core.info(`Verifying branch ${branchName} is accessible...`);
+  const maxRetries = 5;
+  const baseDelay = 500; // 500ms
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const branchRef = await octokit.rest.git.getRef({
+        owner,
+        repo,
+        ref: `heads/${branchName}`
+      });
+      const branchSha = branchRef.data.object?.sha || branchRef.data.sha;
+      core.info(`Branch ${branchName} verified and accessible at SHA: ${branchSha}`);
+      return true;
+    } catch (error) {
+      if (error.status === 404) {
+        if (attempt < maxRetries - 1) {
+          const delay = baseDelay * Math.pow(2, attempt);
+          core.info(`Branch ${branchName} not yet accessible (404), retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})...`);
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        } else {
+          core.warning(`Branch ${branchName} still not accessible after ${maxRetries} attempts`);
+          throw new Error(`Branch ${branchName} was created but is not accessible after multiple retries`);
+        }
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  return true;
 };
 
 const getExistingFileSha = async ({ octokit, branchName, path: repoPath }) => {
