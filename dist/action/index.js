@@ -42537,6 +42537,8 @@ var buildUpdateBranchName = ({ prefix, prNumber, currentBranch }) => {
 // src/action/git.js
 var import_core10 = __toESM(require_core(), 1);
 var import_github2 = __toESM(require_github(), 1);
+var MAX_VERIFICATION_ATTEMPTS = 7;
+var VERIFICATION_BASE_DELAY_MS = 500;
 var ensureUpdateBranchExists = async ({ octokit, branchName, baseBranch }) => {
   if (!octokit) {
     throw new Error("ensureUpdateBranchExists requires an authenticated octokit client.");
@@ -42582,7 +42584,9 @@ var ensureUpdateBranchExists = async ({ octokit, branchName, baseBranch }) => {
     import_core10.default.info(`Successfully created branch ${branchName}`);
   } catch (error46) {
     if (error46.status === 422) {
-      import_core10.default.info(`Branch ${branchName} already exists (422), verifying it's accessible...`);
+      import_core10.default.info(
+        `Branch ${branchName} already exists (422), will reuse existing branch after verification...`
+      );
     } else {
       import_core10.default.warning(
         `Failed to create branch ${branchName} via GitHub API: ${error46.message} (status: ${error46.status})`
@@ -42591,9 +42595,7 @@ var ensureUpdateBranchExists = async ({ octokit, branchName, baseBranch }) => {
     }
   }
   import_core10.default.info(`Verifying branch ${branchName} is accessible via GitHub API...`);
-  const maxRetries = 5;
-  const baseDelay = 500;
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
+  for (let attempt = 0; attempt < MAX_VERIFICATION_ATTEMPTS; attempt++) {
     try {
       const branchRefData = await octokit.rest.git.getRef({
         owner,
@@ -42605,15 +42607,15 @@ var ensureUpdateBranchExists = async ({ octokit, branchName, baseBranch }) => {
       return true;
     } catch (error46) {
       if (error46.status === 404) {
-        if (attempt < maxRetries - 1) {
-          const delay = baseDelay * Math.pow(2, attempt);
+        if (attempt < MAX_VERIFICATION_ATTEMPTS - 1) {
+          const delay = VERIFICATION_BASE_DELAY_MS * Math.pow(2, attempt);
           import_core10.default.info(
-            `Branch ${branchName} not yet accessible (404), retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})...`
+            `Branch ${branchName} not yet accessible (404), retrying in ${delay}ms (attempt ${attempt + 1}/${MAX_VERIFICATION_ATTEMPTS})...`
           );
           await new Promise((resolve) => setTimeout(resolve, delay));
         } else {
           import_core10.default.warning(
-            `Branch ${branchName} still not accessible after ${maxRetries} attempts via GitHub API`
+            `Branch ${branchName} still not accessible after ${MAX_VERIFICATION_ATTEMPTS} attempts via GitHub API`
           );
           throw new Error(
             `Branch ${branchName} was created but is not accessible after multiple retries`
