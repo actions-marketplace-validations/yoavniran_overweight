@@ -42490,17 +42490,6 @@ var resolveBaseBranch = async (octokit) => {
     import_core8.default.info(`base branch is ${import_github.default.context.payload.pull_request.base.ref}`);
     return import_github.default.context.payload.pull_request.base.ref;
   }
-  if (process.env.GITHUB_REF_NAME) {
-    import_core8.default.info(`base branch is ${process.env.GITHUB_REF_NAME}`);
-    return process.env.GITHUB_REF_NAME;
-  }
-  if (process.env.GITHUB_REF) {
-    const ref = process.env.GITHUB_REF.split("/").pop();
-    if (ref) {
-      import_core8.default.info(`base branch is ${ref}`);
-      return ref;
-    }
-  }
   if (octokit) {
     try {
       const { owner, repo } = import_github.default.context.repo;
