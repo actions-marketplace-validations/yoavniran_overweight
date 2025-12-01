@@ -1,3 +1,10 @@
+## [1.3.3](https://github.com/yoavniran/overweight/compare/v1.3.2...v1.3.3) (2025-12-01)
+
+
+### Bug Fixes
+
+* enhance GitHub Action for semantic-release and base branch resolution ([d232dd9](https://github.com/yoavniran/overweight/commit/d232dd9ea3a1baedef3cf32e91c3810d7933ef7e))
+
 ## [1.3.2](https://github.com/yoavniran/overweight/compare/v1.3.1...v1.3.2) (2025-12-01)
 
 
